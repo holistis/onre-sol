@@ -97,9 +97,15 @@ async function main() {
         return mint.publicKey;
     }
 
-    function createUserAccount() {
+    async function createUserAccount() {
         const user = Keypair.generate();
-        svm.airdrop(user.publicKey, BigInt(INITIAL_LAMPORTS));
+        // NOTE: svm.airdrop() called a second time crashes LiteSVM natively (isolated via
+        // diagnostics — the payer's one-time setup airdrop is fine, a second airdrop() call
+        // is not). Fund new users via a plain SystemProgram.transfer from the already-funded
+        // payer instead — economically identical for this PoC's purposes.
+        await sendAndConfirm(new Transaction().add(SystemProgram.transfer({
+            fromPubkey: payer.publicKey, toPubkey: user.publicKey, lamports: INITIAL_LAMPORTS,
+        })), [payer]);
         return user;
     }
 
@@ -195,7 +201,7 @@ async function main() {
     await sendAndConfirm(new Transaction().add(SystemProgram.transfer({ fromPubkey: payer.publicKey, toPubkey: throwaway.publicKey, lamports: 1000 })), [payer]);
     console.log("diag: OK, plain second transaction survived");
 
-    const redemptionAdmin = createUserAccount();
+    const redemptionAdmin = await createUserAccount();
     console.log("about to call setRedemptionAdmin with EXPLICIT accounts (state PDA + boss)...");
     await program.methods.setRedemptionAdmin(redemptionAdmin.publicKey).accounts({
         state: pdas.statePda, boss: payer.publicKey,
@@ -220,7 +226,7 @@ async function main() {
     console.log("OK  makeRedemptionOffer() — redemption feeMint->usdc created (THIS IS WHERE take_offer WOULD HAVE THROWN 'Token-2022 with transfer fees not supported' — no such rejection happened)");
 
     async function fundRedeemer() {
-        const user = createUserAccount();
+        const user = await createUserAccount();
         const ata = getAssociatedTokenAddressSync(feeMint, user.publicKey, false, TOKEN_2022_PROGRAM_ID);
         const createAtaIx = createAssociatedTokenAccountInstruction(payer.publicKey, ata, user.publicKey, feeMint, TOKEN_2022_PROGRAM_ID);
         const mintToIx = createMintToInstruction(feeMint, ata, payer.publicKey, BigInt(10_000e9), [], TOKEN_2022_PROGRAM_ID);
