@@ -123,8 +123,9 @@ async function main() {
         getAccountInfo: async (pk) => rawGetAccount(pk),
         getAccountInfoAndContext: async (pk) => ({ context: { slot: 0 }, value: rawGetAccount(pk) }),
         sendRawTransaction: async (raw) => {
-            const tx = Transaction.from(raw);
-            const result = svm.sendTransaction(tx.serialize());
+            // raw is already fully serialized+signed by Anchor — do NOT round-trip it through
+            // Transaction.from(raw).serialize() again, pass the bytes straight through.
+            const result = svm.sendTransaction(new Uint8Array(raw));
             if (typeof result.err === "function") {
                 const logs = result.meta().logs();
                 const error = new Error(result.toString());
@@ -143,7 +144,7 @@ async function main() {
                     tx.feePayer = payer.publicKey;
                     tx.partialSign(payer);
                 }
-                const result = svm.simulateTransaction(tx.serialize());
+                const result = svm.simulateTransaction(new Uint8Array(tx.serialize({ requireAllSignatures: false })));
                 if ("Err" in result) {
                     const err = result.Err;
                     const meta = err.meta();
