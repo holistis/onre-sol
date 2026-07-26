@@ -175,7 +175,10 @@ async function main() {
     console.log("OK  initialize()");
 
     const redemptionAdmin = createUserAccount();
-    await program.methods.setRedemptionAdmin(redemptionAdmin.publicKey).accounts({}).rpc();
+    console.log("about to call setRedemptionAdmin with EXPLICIT accounts (state PDA + boss)...");
+    await program.methods.setRedemptionAdmin(redemptionAdmin.publicKey).accounts({
+        state: pdas.statePda, boss: payer.publicKey,
+    }).rpc();
     console.log("OK  setRedemptionAdmin()");
 
     const feeMint = await createMint2022WithTransferFee(9, FEE_BPS, MAX_FEE);
