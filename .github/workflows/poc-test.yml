@@ -46,13 +46,13 @@ jobs:
 
       - run: pnpm install --no-frozen-lockfile
 
-      - name: Run PoC test (pool=threads diagnostic)
-        run: pnpm exec vitest run tests/redemption/_poc_token2022_fee_insolvency.spec.ts --reporter=verbose --pool=threads --poolOptions.threads.singleThread
+      - name: Run PoC test (no-isolate diagnostic)
+        run: pnpm exec vitest run tests/redemption/_poc_token2022_fee_insolvency.spec.ts --reporter=verbose --no-isolate
 
-      - name: Run PoC test (default forks pool, real result)
+      - name: Run PoC test (default, real result)
         if: always()
         run: pnpm exec vitest run tests/redemption/_poc_token2022_fee_insolvency.spec.ts --reporter=verbose
 
-      - name: Run one existing redemption test for sanity comparison
+      - name: Run one existing redemption test with no-isolate for comparison
         if: always()
-        run: pnpm exec vitest run tests/redemption/create_redemption_request.spec.ts --reporter=verbose --pool=threads --poolOptions.threads.singleThread
+        run: pnpm exec vitest run tests/redemption/create_redemption_request.spec.ts --reporter=verbose --no-isolate
