@@ -179,7 +179,7 @@ async function main() {
     await program.methods.initialize().accounts({
         boss: payer.publicKey, onycMint,
         programData: PublicKey.findProgramAddressSync([program.programId.toBuffer()], BPF_UPGRADEABLE_LOADER_PROGRAM_ID)[0],
-    }).rpc();
+    }).rpc({ skipPreflight: true });
     console.log("OK  initialize()");
 
     console.log("diag: raw svm.getAccount(statePda) right after initialize()...");
@@ -199,7 +199,7 @@ async function main() {
     console.log("about to call setRedemptionAdmin with EXPLICIT accounts (state PDA + boss)...");
     await program.methods.setRedemptionAdmin(redemptionAdmin.publicKey).accounts({
         state: pdas.statePda, boss: payer.publicKey,
-    }).rpc();
+    }).rpc({ skipPreflight: true });
     console.log("OK  setRedemptionAdmin()");
 
     const feeMint = await createMint2022WithTransferFee(9, FEE_BPS, MAX_FEE);
@@ -207,7 +207,7 @@ async function main() {
 
     await program.methods.makeOffer(0, false, false).accounts({
         tokenInMint: usdcMint, tokenInProgram: TOKEN_PROGRAM_ID, tokenOutMint: feeMint,
-    }).rpc();
+    }).rpc({ skipPreflight: true });
     const offerPda = getOfferPda(usdcMint, feeMint);
     console.log("OK  makeOffer() — base offer usdc->feeMint created");
 
@@ -215,7 +215,7 @@ async function main() {
         offer: offerPda, tokenInMint: feeMint, tokenOutMint: usdcMint,
         tokenInProgram: TOKEN_2022_PROGRAM_ID, tokenOutProgram: TOKEN_PROGRAM_ID,
         signer: payer.publicKey,
-    }).rpc();
+    }).rpc({ skipPreflight: true });
     const redemptionOfferPda = getRedemptionOfferPda(feeMint, usdcMint);
     console.log("OK  makeRedemptionOffer() — redemption feeMint->usdc created (THIS IS WHERE take_offer WOULD HAVE THROWN 'Token-2022 with transfer fees not supported' — no such rejection happened)");
 
@@ -238,10 +238,10 @@ async function main() {
     console.log("\nStep 1: two ordinary, unrelated redeemers each create a redemption request for", GROSS_AMOUNT);
     await program.methods.createRedemptionRequest(new BN(GROSS_AMOUNT)).accounts({
         redemptionOffer: redemptionOfferPda, redeemer: redeemerA.publicKey, tokenInMint: feeMint, tokenProgram: TOKEN_2022_PROGRAM_ID,
-    }).signers([redeemerA]).rpc();
+    }).signers([redeemerA]).rpc({ skipPreflight: true });
     await program.methods.createRedemptionRequest(new BN(GROSS_AMOUNT)).accounts({
         redemptionOffer: redemptionOfferPda, redeemer: redeemerB.publicKey, tokenInMint: feeMint, tokenProgram: TOKEN_2022_PROGRAM_ID,
-    }).signers([redeemerB]).rpc();
+    }).signers([redeemerB]).rpc({ skipPreflight: true });
     console.log("  OK  both create_redemption_request calls succeeded (no fee-guard rejection anywhere)");
 
     const vaultAfterDeposits = await getTokenAccountBalance(vaultAta);
@@ -261,7 +261,7 @@ async function main() {
         redemptionOffer: redemptionOfferPda, redemptionRequest: reqA, signer: redeemerA.publicKey,
         tokenInMint: feeMint, redeemer: redeemerA.publicKey, redemptionAdmin: redemptionAdmin.publicKey,
         tokenProgram: TOKEN_2022_PROGRAM_ID,
-    }).signers([redeemerA]).rpc();
+    }).signers([redeemerA]).rpc({ skipPreflight: true });
     const vaultAfterACancel = await getTokenAccountBalance(vaultAta);
     assertEqual(vaultAfterACancel, vaultAfterDeposits - BigInt(GROSS_AMOUNT), "vault debited the full GROSS amount on A's cancel, not the net A actually contributed");
 
@@ -273,7 +273,7 @@ async function main() {
             redemptionOffer: redemptionOfferPda, redemptionRequest: reqB, signer: redeemerB.publicKey,
             tokenInMint: feeMint, redeemer: redeemerB.publicKey, redemptionAdmin: redemptionAdmin.publicKey,
             tokenProgram: TOKEN_2022_PROGRAM_ID,
-        }).signers([redeemerB]).rpc();
+        }).signers([redeemerB]).rpc({ skipPreflight: true });
     } catch (err) {
         bFailed = true;
         bErr = err instanceof Error ? err.message : String(err);
