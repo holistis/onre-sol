@@ -174,6 +174,19 @@ async function main() {
     }).rpc();
     console.log("OK  initialize()");
 
+    console.log("diag: raw svm.getAccount(statePda) right after initialize()...");
+    const rawStateAcct = svm.getAccount(pdas.statePda);
+    console.log("diag: OK, raw account bytes length =", rawStateAcct ? rawStateAcct.data.length : "null");
+
+    console.log("diag: program.account.state.fetch() via Anchor's decoder...");
+    const stateViaAnchor = await program.account.state.fetch(pdas.statePda);
+    console.log("diag: OK, boss on state =", stateViaAnchor.boss.toBase58());
+
+    console.log("diag: second harmless transaction — plain SOL transfer, no program involved...");
+    const throwaway = Keypair.generate();
+    await sendAndConfirm(new Transaction().add(SystemProgram.transfer({ fromPubkey: payer.publicKey, toPubkey: throwaway.publicKey, lamports: 1000 })), [payer]);
+    console.log("diag: OK, plain second transaction survived");
+
     const redemptionAdmin = createUserAccount();
     console.log("about to call setRedemptionAdmin with EXPLICIT accounts (state PDA + boss)...");
     await program.methods.setRedemptionAdmin(redemptionAdmin.publicKey).accounts({
