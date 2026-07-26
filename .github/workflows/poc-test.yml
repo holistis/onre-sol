@@ -46,5 +46,9 @@ jobs:
 
       - run: pnpm install --no-frozen-lockfile
 
+      - name: CJS probe - does litesvm survive plain require()?
+        run: node _poc_cjs_probe.cjs
+
       - name: Run standalone PoC (bypasses vitest entirely)
+        if: always()
         run: pnpm exec tsx _poc_standalone.ts
