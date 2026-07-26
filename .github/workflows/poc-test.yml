@@ -46,5 +46,5 @@ jobs:
 
       - run: pnpm install --no-frozen-lockfile
 
-      - name: CJS probe - full package set + anchor Program instantiation
-        run: node _poc_cjs_probe.cjs
+      - name: Run final self-contained PoC (real anchor.Program, plain CJS)
+        run: node _poc_final.cjs
