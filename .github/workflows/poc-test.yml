@@ -1,0 +1,56 @@
+name: PoC Test (independent security research)
+
+on:
+  workflow_dispatch:
+
+env:
+  SOLANA_VERSION: "stable"
+  ANCHOR_VERSION: "0.32.1"
+
+jobs:
+  poc:
+    name: Run redemption Token-2022 fee-guard PoC
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system packages
+        run: sudo apt-get update && sudo apt-get install -y build-essential libudev-dev pkg-config libssl-dev
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/${{ env.SOLANA_VERSION }}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Install Anchor CLI (avm)
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          avm install ${{ env.ANCHOR_VERSION }}
+          avm use ${{ env.ANCHOR_VERSION }}
+
+      - name: Anchor build
+        run: anchor build
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install node deps
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: pnpm install
+
+      - name: Run PoC test
+        run: pnpm exec vitest run tests/redemption/_poc_token2022_fee_insolvency.spec.ts --reporter=verbose
+
+      - name: Run one existing redemption test for sanity comparison
+        if: always()
+        run: pnpm exec vitest run tests/redemption/create_redemption_request.spec.ts --reporter=verbose
