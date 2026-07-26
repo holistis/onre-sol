@@ -46,8 +46,9 @@ jobs:
 
       - run: pnpm install --no-frozen-lockfile
 
-      - name: CJS probe - does litesvm survive plain require()?
+      - name: CJS probe - does litesvm survive loading real program bytecode?
         run: node _poc_cjs_probe.cjs
 
       - name: Run standalone PoC (.cts forces CJS loading)
+        if: always()
         run: pnpm exec tsx _poc_standalone.cts
