@@ -1,39 +1,33 @@
-console.log("requiring litesvm via CJS...");
-const { LiteSVM, FeatureSet } = require("litesvm");
-console.log("instantiating LiteSVM with featureSet+precompiles (matches TestHelper.create())...");
-const svm = new LiteSVM().withFeatureSet(FeatureSet.allEnabled()).withPrecompiles();
-console.log("OK — instantiated with feature set.");
-
-const fs = require("fs");
-const path = require("path");
-const { PublicKey } = require("@solana/web3.js");
-
-const programPath = path.join(process.cwd(), "target/deploy/onreapp.so");
-console.log("reading program bytes from", programPath);
-const programBytes = fs.readFileSync(programPath);
-console.log("program bytes length:", programBytes.length);
-
-const BPF_UPGRADEABLE_LOADER_PROGRAM_ID = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
+// Load the EXACT same package set as test_helper.ts + onre_program.ts, in plain CJS,
+// to isolate: is the crash caused by a package-combination conflict (e.g. anchor + litesvm),
+// or is it specific to tsx's transpilation of their .ts files?
+console.log("requiring all packages used by test_helper.ts + onre_program.ts...");
+const { LiteSVM, FeatureSet, ComputeBudget } = require("litesvm");
+const {
+    ACCOUNT_SIZE, AccountLayout, getAssociatedTokenAddressSync, MINT_SIZE, MintLayout,
+    TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID, ExtensionType, getMintLen,
+    createInitializeMint2Instruction, createInitializeTransferFeeConfigInstruction,
+    createAssociatedTokenAccountInstruction, createMintToInstruction,
+} = require("@solana/spl-token");
+const { Keypair, PublicKey, SystemProgram, Transaction } = require("@solana/web3.js");
+const { AnchorProvider, BN, Program, Wallet } = require("@coral-xyz/anchor");
 const idl = require("./target/idl/onreapp.json");
-const ONREAPP_PROGRAM_ID = new PublicKey(idl.address);
+console.log("OK — all packages required without crashing.");
 
-const programDataPda = PublicKey.findProgramAddressSync(
-    [ONREAPP_PROGRAM_ID.toBuffer()],
-    BPF_UPGRADEABLE_LOADER_PROGRAM_ID
-)[0];
-console.log("programDataPda derived:", programDataPda.toBase58());
+console.log("instantiating LiteSVM with featureSet+precompiles...");
+const svm = new LiteSVM().withFeatureSet(FeatureSet.allEnabled()).withPrecompiles();
+console.log("OK — LiteSVM instantiated with the FULL package set loaded alongside it.");
 
-const programDataAccountData = Buffer.alloc(45 + programBytes.length);
-programDataAccountData.writeUInt32LE(3, 0);
-programDataAccountData.writeBigUInt64LE(BigInt(0), 4);
-programDataAccountData.writeUInt8(1, 12);
-programBytes.copy(programDataAccountData, 45);
+const payer = Keypair.generate();
+svm.airdrop(payer.publicKey, BigInt(100_000_000_000));
+console.log("OK — airdrop succeeded.");
 
-console.log("about to svm.setAccount() with the full program bytecode buffer (this is the step my minimal probe never exercised)...");
-svm.setAccount(programDataPda, {
-    executable: false,
-    data: programDataAccountData,
-    lamports: 10_000_000,
-    owner: BPF_UPGRADEABLE_LOADER_PROGRAM_ID
-});
-console.log("OK — setAccount with full program bytecode succeeded. Crash is NOT here.");
+const wallet = new Wallet(payer);
+const provider = new AnchorProvider(
+    { getLatestBlockhash: async () => ({ blockhash: svm.latestBlockhash(), lastValidBlockHeight: 0 }) },
+    wallet,
+    { commitment: "processed" }
+);
+console.log("about to instantiate anchor Program (this is the one thing my minimal probe never touched)...");
+const program = new Program(idl, provider);
+console.log("OK — anchor Program instantiated successfully. Crash is NOT here either.");
