@@ -1,5 +1,6 @@
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { AnchorProvider, BN, Program, Wallet } from "@coral-xyz/anchor";
+import anchorPkg from "@coral-xyz/anchor";
+const { AnchorProvider, BN, Program, Wallet } = anchorPkg;
 import { Onreapp } from "../target/types/onreapp";
 import { BPF_LOADER_PROGRAM_ID, BPF_UPGRADEABLE_LOADER_PROGRAM_ID, ONREAPP_PROGRAM_ID, TestHelper } from "./test_helper.ts";
 import idl from "../target/idl/onreapp.json";
