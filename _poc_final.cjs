@@ -54,7 +54,7 @@ async function main() {
         tx.recentBlockhash = svm.latestBlockhash();
         tx.feePayer = payer.publicKey;
         tx.sign(...signers);
-        const result = svm.sendTransaction(tx);
+        const result = svm.sendTransaction(tx.serialize());
         if ("Err" in result) throw new Error(`Transaction failed: ${JSON.stringify(result.Err)}`);
         advanceSlot();
         return result;
@@ -124,7 +124,7 @@ async function main() {
         getAccountInfoAndContext: async (pk) => ({ context: { slot: 0 }, value: rawGetAccount(pk) }),
         sendRawTransaction: async (raw) => {
             const tx = Transaction.from(raw);
-            const result = svm.sendTransaction(tx);
+            const result = svm.sendTransaction(tx.serialize());
             if (typeof result.err === "function") {
                 const logs = result.meta().logs();
                 const error = new Error(result.toString());
@@ -143,7 +143,7 @@ async function main() {
                     tx.feePayer = payer.publicKey;
                     tx.partialSign(payer);
                 }
-                const result = svm.simulateTransaction(tx);
+                const result = svm.simulateTransaction(tx.serialize());
                 if ("Err" in result) {
                     const err = result.Err;
                     const meta = err.meta();
