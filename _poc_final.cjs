@@ -3,9 +3,10 @@
 // compiled onreapp.so via LiteSVM. Same vulnerability scenario as
 // tests/redemption/_poc_token2022_fee_insolvency.spec.ts, ported to avoid the crashing loader.
 // litesvm bumped 0.4.0 -> 1.3.0: 0.4.0 crashed with std::bad_alloc on the SECOND invocation of a
-// loaded BPF program specifically (isolated via extensive diagnostics: plain sendTransaction
-// loops of 15 native-System-Program transfers never crashed; only a second call into the actual
-// deployed onreapp program did, regardless of instruction, account shape, or blockhash freshness).
+// loaded BPF program specifically (isolated via extensive diagnostics). 1.3.0's account-management
+// API switched from @solana/web3.js PublicKey objects to plain base58 strings (@solana/kit
+// Address type at the TS level, a plain string at runtime) — the `addr()` helper below bridges
+// that everywhere a PublicKey needs to reach a litesvm-direct call.
 const { LiteSVM, FeatureSet } = require("litesvm");
 const {
     getAssociatedTokenAddressSync, ExtensionType, getMintLen,
@@ -16,9 +17,10 @@ const {
 } = require("@solana/spl-token");
 const { Keypair, PublicKey, SystemProgram, Transaction } = require("@solana/web3.js");
 const { AnchorProvider, BN, Program, Wallet } = require("@coral-xyz/anchor");
-const fs = require("fs");
 const path = require("path");
 const idl = require("./target/idl/onreapp.json");
+
+const addr = (pk) => pk.toBase58();
 
 const INITIAL_LAMPORTS = 1_000_000_000;
 const BPF_UPGRADEABLE_LOADER_PROGRAM_ID = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -37,12 +39,9 @@ async function main() {
     const clock = svm.getClock();
     clock.unixTimestamp = BigInt(1704067200);
     svm.setClock(clock);
-    svm.airdrop(payer.publicKey, BigInt(100_000_000_000));
+    svm.airdrop(addr(payer.publicKey), BigInt(100_000_000_000));
 
-    const programDataPda = PublicKey.findProgramAddressSync(
-        [ONREAPP_PROGRAM_ID.toBuffer()], BPF_UPGRADEABLE_LOADER_PROGRAM_ID
-    )[0];
-    svm.addProgramFromFile(ONREAPP_PROGRAM_ID, path.join(process.cwd(), "target/deploy/onreapp.so"));
+    svm.addProgramFromFile(addr(ONREAPP_PROGRAM_ID), path.join(process.cwd(), "target/deploy/onreapp.so"));
     console.log("OK  program deployed into LiteSVM via addProgramFromFile (real compiled .so)");
 
     function advanceSlot() {
@@ -69,7 +68,10 @@ async function main() {
             freezeAuthorityOption: 1, freezeAuthority: payer.publicKey,
         }, mintData);
         const mintAddress = PublicKey.unique();
-        svm.setAccount(mintAddress, { executable: false, data: mintData, lamports: INITIAL_LAMPORTS, owner: TOKEN_PROGRAM_ID });
+        svm.setAccount({
+            address: addr(mintAddress), data: new Uint8Array(mintData), executable: false,
+            lamports: BigInt(INITIAL_LAMPORTS), programAddress: addr(TOKEN_PROGRAM_ID), space: BigInt(mintData.length),
+        });
         return mintAddress;
     }
 
@@ -96,9 +98,21 @@ async function main() {
         return user;
     }
 
-    async function getTokenAccountBalance(addr) {
-        const acct = svm.getAccount(addr);
-        if (!acct) throw new Error("account not found: " + addr.toBase58());
+    function rawGetAccount(pk) {
+        const a = svm.getAccount(addr(pk));
+        if (!a) return null;
+        const ownerPk = new PublicKey(a.owner || a.programAddress);
+        return {
+            data: Buffer.from(a.data),
+            executable: a.executable,
+            lamports: Number(a.lamports),
+            owner: ownerPk,
+        };
+    }
+
+    async function getTokenAccountBalance(pk) {
+        const acct = rawGetAccount(pk);
+        if (!acct) throw new Error("account not found: " + addr(pk));
         return AccountLayout.decode(acct.data).amount;
     }
 
@@ -106,8 +120,8 @@ async function main() {
     const connection = {
         getLatestBlockhash: async () => ({ blockhash: svm.latestBlockhash(), lastValidBlockHeight: 0 }),
         getMinimumBalanceForRentExemption: async () => 890880,
-        getAccountInfo: async (pk) => { const a = svm.getAccount(pk); return a ? { ...a, data: Buffer.from(a.data) } : null; },
-        getAccountInfoAndContext: async (pk) => { const a = svm.getAccount(pk); return { context: { slot: 0 }, value: a ? { ...a, data: Buffer.from(a.data) } : null }; },
+        getAccountInfo: async (pk) => rawGetAccount(pk),
+        getAccountInfoAndContext: async (pk) => ({ context: { slot: 0 }, value: rawGetAccount(pk) }),
         sendRawTransaction: async (raw) => {
             const tx = Transaction.from(raw);
             const result = svm.sendTransaction(tx);
@@ -178,7 +192,7 @@ async function main() {
     await program.methods.setRedemptionAdmin(redemptionAdmin.publicKey).accounts({
         state: pdas.statePda, boss: payer.publicKey,
     }).rpc({ skipPreflight: true });
-    console.log("OK  setRedemptionAdmin() — SECOND program invocation, this is where 0.4.0 crashed");
+    console.log("OK  setRedemptionAdmin() — SECOND program invocation (this is where litesvm 0.4.0 crashed natively)");
 
     const feeMint = await createMint2022WithTransferFee(9, FEE_BPS, MAX_FEE);
     console.log("OK  Token-2022 fee mint created:", feeMint.toBase58());
