@@ -53,6 +53,12 @@ async function main() {
     svm.setAccount(ONREAPP_PROGRAM_ID, { executable: true, data: programAccountData, lamports: 1_000_000, owner: BPF_UPGRADEABLE_LOADER_PROGRAM_ID });
     console.log("OK  program deployed into LiteSVM from the real compiled .so");
 
+    function advanceSlot() {
+        const clock = svm.getClock();
+        svm.warpToSlot(clock.slot + BigInt(1));
+        svm.expireBlockhash();
+    }
+
     let lastBlockhash = svm.latestBlockhash();
     async function sendAndConfirm(tx, signers) {
         tx.recentBlockhash = svm.latestBlockhash();
@@ -60,6 +66,7 @@ async function main() {
         tx.sign(...signers);
         const result = svm.sendTransaction(tx);
         if ("Err" in result) throw new Error(`Transaction failed: ${JSON.stringify(result.Err)}`);
+        advanceSlot();
         return result;
     }
 
@@ -118,6 +125,7 @@ async function main() {
                 error.logs = logs;
                 throw error;
             }
+            advanceSlot();
             return "signature";
         },
         confirmTransaction: async () => ({ value: { err: null } }),
