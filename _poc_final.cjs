@@ -39,22 +39,11 @@ async function main() {
     svm.setClock(clock);
     svm.airdrop(payer.publicKey, BigInt(100_000_000_000));
 
-    const programBytes = fs.readFileSync(path.join(process.cwd(), "target/deploy/onreapp.so"));
     const programDataPda = PublicKey.findProgramAddressSync(
         [ONREAPP_PROGRAM_ID.toBuffer()], BPF_UPGRADEABLE_LOADER_PROGRAM_ID
     )[0];
-    const programDataAccountData = Buffer.alloc(45 + programBytes.length);
-    programDataAccountData.writeUInt32LE(3, 0);
-    programDataAccountData.writeBigUInt64LE(BigInt(0), 4);
-    programDataAccountData.writeUInt8(1, 12);
-    payer.publicKey.toBuffer().copy(programDataAccountData, 13);
-    programBytes.copy(programDataAccountData, 45);
-    svm.setAccount(programDataPda, { executable: false, data: programDataAccountData, lamports: 10_000_000, owner: BPF_UPGRADEABLE_LOADER_PROGRAM_ID });
-    const programAccountData = Buffer.alloc(36);
-    programAccountData.writeUInt32LE(2, 0);
-    programDataPda.toBuffer().copy(programAccountData, 4);
-    svm.setAccount(ONREAPP_PROGRAM_ID, { executable: true, data: programAccountData, lamports: 1_000_000, owner: BPF_UPGRADEABLE_LOADER_PROGRAM_ID });
-    console.log("OK  program deployed into LiteSVM from the real compiled .so");
+    svm.addProgramFromFile(ONREAPP_PROGRAM_ID, path.join(process.cwd(), "target/deploy/onreapp.so"));
+    console.log("OK  program deployed into LiteSVM via addProgramFromFile (real compiled .so)");
 
     function advanceSlot() {
         const clock = svm.getClock();
