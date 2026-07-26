@@ -44,7 +44,7 @@ jobs:
         with:
           node-version: 20
 
-      - run: pnpm install
+      - run: pnpm install --no-frozen-lockfile
 
       - name: Run PoC test
         run: pnpm exec vitest run tests/redemption/_poc_token2022_fee_insolvency.spec.ts --reporter=verbose
